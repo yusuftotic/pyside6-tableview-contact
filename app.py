@@ -19,7 +19,7 @@ from PySide6.QtCore import (
 	QAbstractTableModel,
 )
 
-class ContactModel(QAbstractTableModel):
+class ContactsModel(QAbstractTableModel):
 	def __init__(self, contacts=None):
 		super().__init__()
 		self.contacts = contacts or []
@@ -31,6 +31,7 @@ class ContactModel(QAbstractTableModel):
 			return None
 
 		if role == Qt.ItemDataRole.DisplayRole:
+
 			return self.contacts[index.row()][index.column()]
 		
 	def rowCount(self, index):
@@ -48,7 +49,7 @@ class ContactModel(QAbstractTableModel):
 				return str(section + 1)
 
 
-class ContactApp(QMainWindow):
+class ContactsApp(QMainWindow):
 
 	current_file_path = os.path.abspath(__file__)
 	current_folder_path = os.path.dirname(current_file_path)
@@ -59,7 +60,7 @@ class ContactApp(QMainWindow):
 
 		self.setupUi()
 
-		self.model = ContactModel()
+		self.model = ContactsModel()
 		self.load()
 
 		self.table_view_contact.setModel(self.model)
@@ -85,6 +86,8 @@ class ContactApp(QMainWindow):
 			self.model.contacts.append([first_name, last_name, phone_number, email, adress])
 			self.model.layoutChanged.emit()
 
+			self.save()
+
 			self.lineedit_add_first_name.clear()
 			self.lineedit_add_last_name.clear()
 			self.lineedit_add_phone_number.clear()
@@ -107,6 +110,8 @@ class ContactApp(QMainWindow):
 
 			self.table_view_contact.clearSelection()
 
+			self.save()
+
 
 
 	def edit_contact(self):
@@ -115,7 +120,7 @@ class ContactApp(QMainWindow):
 
 	def load(self):
 		try:
-			with open(ContactApp.csv_path, "r", encoding="utf-8", newline="") as csvfile:
+			with open(ContactsApp.csv_path, "r", encoding="utf-8", newline="") as csvfile:
 				
 				reader = csv.reader(csvfile)
 
@@ -127,6 +132,14 @@ class ContactApp(QMainWindow):
 		except Exception:
 			pass
 
+	
+	def save(self):
+		with open(ContactsApp.csv_path, "w", encoding="utf-8", newline="") as csvfile:
+
+			writer = csv.writer(csvfile)
+
+			writer.writerow(self.model.headers)
+			writer.writerows(self.model.contacts)
 
 	def setupUi(self):
 
@@ -203,6 +216,6 @@ class ContactApp(QMainWindow):
 
 if __name__ == "__main__":
 	app = QApplication(sys.argv)
-	window = ContactApp()
+	window = ContactsApp()
 	window.show()
 	sys.exit(app.exec())
