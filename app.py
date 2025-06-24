@@ -21,7 +21,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import (
 	Qt,
 	QAbstractTableModel,
-	QRect
+	QRect,
+	QTimer
 )
 
 class ContactsModel(QAbstractTableModel):
@@ -65,6 +66,9 @@ class ContactsApp(QMainWindow):
 	def __init__(self):
 		super().__init__()
 
+		self.found_indexes = []
+		self.founded_contacts = []
+
 		self.setupUi()
 
 		self.model = ContactsModel()
@@ -73,6 +77,8 @@ class ContactsApp(QMainWindow):
 		self.table_view_contact.setModel(self.model)
 		self.table_view_contact.resizeColumnsToContents()
 
+		self.lineedit_search.textChanged.connect(self.search_contact)
+		# self.lineedit_search.returnPressed.connect(self.search_contact)
 
 		self.button_add.pressed.connect(self.add_contact)
 		self.button_delete.pressed.connect(self.delete_contact)
@@ -295,6 +301,51 @@ class ContactsApp(QMainWindow):
 		dialog.show()
 
 
+	def search_contact(self):
+		self.load()
+		search_text = self.lineedit_search.text().strip().lower()
+
+		contacts = self.model.contacts
+
+		# QTimer.singleShot(300, lambda: print(search_text))
+
+		self.found_indexes.clear()
+		self.founded_contacts.clear()
+
+		# QTimer.singleShot(300, lambda: self.linear_search(contacts, search_text))
+		self.linear_search(self.model.contacts, search_text)
+
+		print(self.found_indexes)
+		
+		if len(search_text) == 0:
+			self.load()
+			self.model.layoutChanged.emit()
+			return
+
+		if len(self.found_indexes) > 0:
+			self.founded_contacts = [contacts[i] for i in self.found_indexes]
+			self.model.contacts = self.founded_contacts
+			self.model.layoutChanged.emit()
+		else:
+			self.load()
+			self.model.layoutChanged.emit()
+
+
+	def linear_search(self, data, target):
+		for i in range(len(data)):
+			for j in range(len(data[0])):
+				if target in data[i][j].lower():
+					if i in self.found_indexes:
+						continue
+					self.found_indexes.append(data.index(data[i]))
+
+		if len(self.found_indexes) > 0:
+			return self.found_indexes
+		else:
+			return -1
+
+
+
 	def add_contact(self):
 		self.show_add_contact_dialog()
 
@@ -360,7 +411,7 @@ class ContactsApp(QMainWindow):
 
 	def setupUi(self):
 
-		self.setWindowTitle("Contact")
+		self.setWindowTitle("Contacts App")
 		self.setFixedSize(700, 500)
 		# self.resize(500, 400)
 		# self.setMinimumSize(500, 400)
@@ -373,8 +424,16 @@ class ContactsApp(QMainWindow):
 		# layout.setSpacing(20)
 		central_widget.setLayout(layout)
 
-		label_table_view = QLabel("Contact")
-		label_table_view.setStyleSheet("font-size: 15px; margin-top:15px")
+		layout_search = QHBoxLayout()
+		self.lineedit_search = QLineEdit()
+		self.lineedit_search.setPlaceholderText("Search")
+		self.lineedit_search.setFixedWidth(400)
+		self.lineedit_search.setFixedHeight(25)
+		layout_search.addWidget(self.lineedit_search)
+		layout.addLayout(layout_search)
+
+		label_table_view = QLabel("Contacts")
+		label_table_view.setStyleSheet("font-size: 20px; margin-top:15px")
 		self.table_view_contact = QTableView()
 		self.table_view_contact.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 		self.table_view_contact.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
