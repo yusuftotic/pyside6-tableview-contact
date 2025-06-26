@@ -25,6 +25,8 @@ from PySide6.QtCore import (
 	QTimer
 )
 
+from csvdb import CSVDB
+
 class ContactsModel(QAbstractTableModel):
 	def __init__(self, contacts=None):
 		super().__init__()
@@ -38,7 +40,7 @@ class ContactsModel(QAbstractTableModel):
 
 		if role == Qt.ItemDataRole.DisplayRole:
 
-			return self.contacts[index.row()][index.column()]
+			return self.contacts[index.row()][index.column()+1]
 		
 	def rowCount(self, index):
 		return len(self.contacts)
@@ -59,25 +61,23 @@ class ContactsModel(QAbstractTableModel):
 
 class ContactsApp(QMainWindow):
 
-	current_file_path = os.path.abspath(__file__)
-	current_folder_path = os.path.dirname(current_file_path)
-	csv_path = os.path.join(current_folder_path, "data.csv")	
-
 	def __init__(self):
 		super().__init__()
 
+		self.db = CSVDB("contatcs")
+		self.csv_path = self.db.csv_file_path
+		self.contacts = self.db.find_all()
 		self.found_indexes = []
 		self.founded_contacts = []
 
 		self.setupUi()
 
-		self.model = ContactsModel()
-		self.load()
+		self.model = ContactsModel(self.contacts)
 
 		self.table_view_contact.setModel(self.model)
 		self.table_view_contact.resizeColumnsToContents()
 
-		self.lineedit_search.textChanged.connect(self.search_contact)
+		self.lineedit_search.textChanged.connect(self.handle_search_text_changed)
 		# self.lineedit_search.returnPressed.connect(self.search_contact)
 
 		self.button_add.pressed.connect(self.add_contact)
@@ -112,10 +112,9 @@ class ContactsApp(QMainWindow):
 		return (dialog_x, dialog_y)
 
 
-	def show_add_contact_dialog(self, existing_contact=None, existing_contact_index=None):
+	def show_add_contact_dialog(self, existing_contact=None):
 
 		self.stay_open = False
-
 
 		dialog = QDialog(self)
 
@@ -136,7 +135,7 @@ class ContactsApp(QMainWindow):
 		lineedit_add_first_name = QLineEdit()
 		# lineedit_add_first_name.setText(existing_contact[0]) if existing_contact else ""
 		if existing_contact:
-			lineedit_add_first_name.setText(existing_contact[0])
+			lineedit_add_first_name.setText(existing_contact[1])
 		lineedit_add_first_name.setPlaceholderText("e.g. Yusuf")
 		layout_first_name = QHBoxLayout()
 		layout_first_name.addWidget(label_add_first_name)
@@ -147,7 +146,7 @@ class ContactsApp(QMainWindow):
 		lineedit_add_last_name = QLineEdit()
 		lineedit_add_last_name.setPlaceholderText("e.g. Totic")
 		if existing_contact:
-			lineedit_add_last_name.setText(existing_contact[1])
+			lineedit_add_last_name.setText(existing_contact[2])
 		layout_last_name = QHBoxLayout()
 		layout_last_name.addWidget(label_add_last_name)
 		layout_last_name.addWidget(lineedit_add_last_name)
@@ -157,7 +156,7 @@ class ContactsApp(QMainWindow):
 		lineedit_add_phone_number = QLineEdit()
 		lineedit_add_phone_number.setPlaceholderText("e.g. +905534762974")
 		if existing_contact:
-			lineedit_add_phone_number.setText(existing_contact[2])
+			lineedit_add_phone_number.setText(existing_contact[3])
 		layout_phone_number = QHBoxLayout()
 		layout_phone_number.addWidget(label_add_phone_number)
 		layout_phone_number.addWidget(lineedit_add_phone_number)
@@ -167,7 +166,7 @@ class ContactsApp(QMainWindow):
 		lineedit_add_email = QLineEdit()
 		lineedit_add_email.setPlaceholderText("e.g. yusuftotic@email.com")
 		if existing_contact:
-			lineedit_add_email.setText(existing_contact[3])
+			lineedit_add_email.setText(existing_contact[4])
 		layout_email = QHBoxLayout()
 		layout_email.addWidget(label_add_email)
 		layout_email.addWidget(lineedit_add_email)
@@ -177,7 +176,7 @@ class ContactsApp(QMainWindow):
 		lineedit_add_address = QLineEdit()
 		lineedit_add_address.setPlaceholderText("e.g. 202 Elmwood Dr, Mountain Crest, CO 80302")
 		if existing_contact:
-			lineedit_add_address.setText(existing_contact[4])
+			lineedit_add_address.setText(existing_contact[5])
 		layout_address = QHBoxLayout()
 		layout_address.addWidget(label_add_address)
 		layout_address.addWidget(lineedit_add_address)
@@ -238,17 +237,19 @@ class ContactsApp(QMainWindow):
 
 
 			if first_name and phone_number:
+
+				new_contact = [first_name, last_name, phone_number, email, address]
 				
 				if existing_contact:
-					# index = self.model.contacts.index(existing_contact)
-					self.model.contacts[existing_contact_index.row()] = [first_name, last_name, phone_number, email, address]
-					self.model.dataChanged.emit(existing_contact_index, existing_contact_index)
+
+					_id = existing_contact[0]
+					
+					self.db.edit(_id, new_contact)
+					self.update_model()
 					self.table_view_contact.clearFocus()
-					self.save()
 				else:
-					self.model.contacts.append([first_name, last_name, phone_number, email, address])
-					self.model.layoutChanged.emit()
-					self.save()
+					self.db.create(data=new_contact)
+					self.update_model()
 
 				lineedit_add_first_name.clear()
 				lineedit_add_last_name.clear()
@@ -301,34 +302,25 @@ class ContactsApp(QMainWindow):
 		dialog.show()
 
 
+	def handle_search_text_changed(self):
+		QTimer.singleShot(200, self.search_contact)
+
+
 	def search_contact(self):
-		self.load()
+
 		search_text = self.lineedit_search.text().strip().lower()
 
-		contacts = self.model.contacts
+		found_contact = self.db.find(search_text)
+		if found_contact == -1:
+			self.model.contacts = []
+			self.model.layoutChanged.emit()
 
-		# QTimer.singleShot(300, lambda: print(search_text))
+		else: 
+			self.model.contacts = found_contact
+			self.model.layoutChanged.emit()
 
-		self.found_indexes.clear()
-		self.founded_contacts.clear()
-
-		# QTimer.singleShot(300, lambda: self.linear_search(contacts, search_text))
-		self.linear_search(self.model.contacts, search_text)
-
-		print(self.found_indexes)
-		
 		if len(search_text) == 0:
-			self.load()
-			self.model.layoutChanged.emit()
-			return
-
-		if len(self.found_indexes) > 0:
-			self.founded_contacts = [contacts[i] for i in self.found_indexes]
-			self.model.contacts = self.founded_contacts
-			self.model.layoutChanged.emit()
-		else:
-			self.load()
-			self.model.layoutChanged.emit()
+			self.update_model()
 
 
 	def linear_search(self, data, target):
@@ -353,25 +345,29 @@ class ContactsApp(QMainWindow):
 	def delete_contact(self):
 
 		indexes = self.table_view_contact.selectedIndexes()
-		
-		contact = self.model.contacts[indexes[0].row()]
 
 		if indexes:
+		
+			contact = self.model.contacts[indexes[0].row()]
+
+			_id = contact[0]
+
 			reply = QMessageBox.question(
 				self,
 				"Delete Contact",
-				f"Are you sure you want to delete {contact[0]} {contact[1]} contact?",
+				f"Are you sure you want to delete {contact[1]} {contact[2]} contact?",
 				QMessageBox.Yes | QMessageBox.No,
 				QMessageBox.No
 			)
 
 			if reply == QMessageBox.Yes:
-				del self.model.contacts[indexes[0].row()]
-				self.model.layoutChanged.emit()
+
+				self.db.delete_by_id(_id)
+				self.update_model()
+
 				self.table_view_contact.clearSelection()
 				self.button_delete.setDisabled(True)
 				self.button_edit.setDisabled(True)
-				self.save()
 			else:
 				self.table_view_contact.clearSelection()
 
@@ -380,34 +376,19 @@ class ContactsApp(QMainWindow):
 	def edit_contact(self):
 		indexes = self.table_view_contact.selectedIndexes()
 		if indexes:
-			row = indexes[0].row()
-			contact = self.model.contacts[row]
-			# print(self.model.contacts)
-			self.show_add_contact_dialog(contact, indexes[0])
+			contact = self.model.contacts[indexes[0].row()]
+
+			self.show_add_contact_dialog(contact)
 
 
-	def load(self):
-		try:
-			with open(ContactsApp.csv_path, "r", encoding="utf-8", newline="") as csvfile:
-				
-				reader = csv.reader(csvfile, delimiter=",")
+	def update_model(self):
+		
+		self.contacts = self.db.find_all()
 
-				headers = next(reader)
+		self.model.contacts = self.contacts
+		
+		self.model.layoutChanged.emit()
 
-				self.model.contacts = list(reader)
-
-
-		except Exception:
-			pass
-
-	
-	def save(self):
-		with open(ContactsApp.csv_path, "w", encoding="utf-8", newline="") as csvfile:
-
-			writer = csv.writer(csvfile, delimiter=",")
-
-			writer.writerow(self.model.headers)
-			writer.writerows(self.model.contacts)
 
 	def setupUi(self):
 
