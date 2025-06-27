@@ -64,7 +64,7 @@ class ContactsApp(QMainWindow):
 	def __init__(self):
 		super().__init__()
 
-		self.db = CSVDB("contatcs")
+		self.db = CSVDB("contacts")
 		self.csv_path = self.db.csv_file_path
 		self.contacts = self.db.find_all()
 		self.found_indexes = []
